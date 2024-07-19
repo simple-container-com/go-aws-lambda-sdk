@@ -13,8 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"github.com/simple-container/go-aws-lambda-sdk/pkg/awsutil"
-	"github.com/simple-container/go-aws-lambda-sdk/pkg/logger"
+	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/awsutil"
+	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
 
 var ginProxy Service

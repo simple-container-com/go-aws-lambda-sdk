@@ -2,7 +2,7 @@ package service
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/simple-container/go-aws-lambda-sdk/pkg/logger"
+	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
 
 type (

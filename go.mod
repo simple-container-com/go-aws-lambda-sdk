@@ -1,4 +1,4 @@
-module github.com/simple-container/go-aws-lambda-sdk
+module github.com/simple-container-com/go-aws-lambda-sdk
 
 go 1.22.5
 

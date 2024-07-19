@@ -9,7 +9,7 @@ default:
       GOOS: ${os:name}
       GOARCH: ${os:arch}
     args:
-      package: github.com/simple-container/go-aws-lambda-sdk
+      package: github.com/simple-container-com/go-aws-lambda-sdk
 profiles:
   skip-test:
     activation:
