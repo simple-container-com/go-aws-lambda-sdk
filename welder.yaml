@@ -1,0 +1,59 @@
+schemaVersion: "1.8.1"
+projectName: go-aws-lambda-sdk
+projectRoot: .
+version: ${env:VERSION:0.0.0}
+default:
+  build:
+    env:
+      CGO_ENABLED: 0
+      GOOS: ${os:name}
+      GOARCH: ${os:arch}
+    args:
+      package: github.com/simple-container/go-aws-lambda-sdk
+profiles:
+  skip-test:
+    activation:
+      skip-tests: true
+modules:
+  - name: go-aws-lambda-sdk
+    build:
+      steps:
+        - task: tools
+        - task: linters
+    deploy:
+      environments:
+        prod:
+          autoDeploy: true
+      steps:
+        - task: tag-release
+tasks:
+  local:
+    runOn: host
+    env:
+      LOCAL_DEBUG: true
+      API_KEY: ${env:API_KEY:test}
+    script:
+      - env
+      - go run ./cmd/go-aws-lambda-sdk
+  tools:
+    runOn: host
+    script:
+      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go get %
+      - go mod download
+      - go generate -tags tools
+      - go mod tidy
+  fmt:
+    runOn: host
+    script:
+      - go mod tidy
+      - ${project:root}/bin/gofumpt -l -w ./
+      - ${project:root}/bin/golangci-lint run --fix
+  linters:
+    runOn: host
+    script:
+      - ${project:root}/bin/golangci-lint run --fast --timeout 5m
+  tag-release:
+    runOn: host
+    script:
+      - git tag ${project:version} || echo "Already set tag ${project:version}"
+      - git push -f origin ${project:version} || echo "Tag ${project:version} already exists in origin"
