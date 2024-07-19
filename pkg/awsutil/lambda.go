@@ -4,8 +4,9 @@ import (
 	"encoding/base64"
 	"strings"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/samber/lo"
+
+	"github.com/aws/aws-lambda-go/events"
 )
 
 func ToLambdaFunctionURLResponse(res events.APIGatewayProxyResponse) events.LambdaFunctionURLResponse {
