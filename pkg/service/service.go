@@ -29,7 +29,7 @@ const (
 	lambdaSizeMbEnv              = "SIMPLE_CONTAINER_AWS_LAMBDA_SIZE_MB"
 	lambdaRoutingTypeFunctionUrl = "function-url"
 	lambdaRoutingTypeApiGw       = "api-gateway"
-	lambdaCostPerMbMs            = 0.0000166667
+	lambdaCostPerMbMs            = 1.62760742e-11
 )
 
 type Service interface {
