@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
@@ -44,6 +45,12 @@ func WithRoutingType(routingType string) Option {
 func WithPort(port string) Option {
 	return func(s *service) {
 		s.port = port
+	}
+}
+
+func WithoutStatusEndpoint() Option {
+	return func(s *service) {
+		s.registerStatusEndpoint = lo.ToPtr(false)
 	}
 }
 

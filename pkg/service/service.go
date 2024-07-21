@@ -52,6 +52,7 @@ type service struct {
 	skipAuthRoutes         []string
 	version                string
 	routingType            string
+	registerStatusEndpoint *bool
 }
 
 func New(ctx context.Context, opts ...Option) (Service, error) {
@@ -103,7 +104,9 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	if s.apiKey != "" {
 		router.Use(s.apiKeyAuthMiddleware())
 	}
-	router.GET("/api/status", s.statusEndpoint)
+	if s.registerStatusEndpoint == nil || lo.FromPtr(s.registerStatusEndpoint) {
+		router.GET("/api/status", s.statusEndpoint)
+	}
 
 	if err := s.registerRoutesCallback(router); err != nil {
 		return nil, errors.Wrapf(err, "failed to register routes")
