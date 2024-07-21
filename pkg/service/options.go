@@ -38,7 +38,7 @@ func WithApiKey(key string) Option {
 
 func WithRoutingType(routingType string) Option {
 	return func(s *service) {
-		s.port = routingType
+		s.routingType = routingType
 	}
 }
 
