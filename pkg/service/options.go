@@ -54,6 +54,18 @@ func WithoutStatusEndpoint() Option {
 	}
 }
 
+func WithLambdaCostPerMbPerMs(cost float64) Option {
+	return func(s *service) {
+		s.lambdaCostPerMbPerMillisecond = cost
+	}
+}
+
+func WithLambdaSize(size float64) Option {
+	return func(s *service) {
+		s.lambdaSize = size
+	}
+}
+
 func WithRequestDebugMode() Option {
 	return func(s *service) {
 		s.requestDebugMode = true

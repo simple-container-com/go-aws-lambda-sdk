@@ -23,6 +23,7 @@ type ResultMeta struct {
 	RequestStartedAt  time.Time     `json:"requestStartedAt" yaml:"requestStartedAt"`
 	RequestFinishedAt time.Time     `json:"requestFinishedAt" yaml:"requestFinishedAt"`
 	RequestTime       time.Duration `json:"requestTime" yaml:"requestTime"`
+	Cost              float64       `json:"cost" yaml:"cost"`
 }
 
 type Error struct {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,8 +26,10 @@ var ginProxy *service
 const (
 	serviceVersionEnv            = "SIMPLE_CONTAINER_VERSION"
 	lambdaRoutingTypeEnv         = "SIMPLE_CONTAINER_AWS_LAMBDA_ROUTING_TYPE"
+	lambdaSizeMbEnv              = "SIMPLE_CONTAINER_AWS_LAMBDA_SIZE_MB"
 	lambdaRoutingTypeFunctionUrl = "function-url"
 	lambdaRoutingTypeApiGw       = "api-gateway"
+	lambdaCostPerMbMs            = 0.0000166667
 )
 
 type Service interface {
@@ -40,21 +43,23 @@ type Service interface {
 }
 
 type service struct {
-	ctx                    context.Context
-	apiKey                 string
-	router                 *gin.Engine
-	cancels                []func()
-	lambdaAdapter          *ginadapter.GinLambda
-	server                 *http.Server
-	localDebugMode         bool
-	requestDebugMode       bool
-	logger                 logger.Logger
-	port                   string
-	registerRoutesCallback RegisterRoutesCallback
-	skipAuthRoutes         []string
-	version                string
-	routingType            string
-	registerStatusEndpoint *bool
+	ctx                           context.Context
+	apiKey                        string
+	router                        *gin.Engine
+	cancels                       []func()
+	lambdaAdapter                 *ginadapter.GinLambda
+	server                        *http.Server
+	localDebugMode                bool
+	requestDebugMode              bool
+	logger                        logger.Logger
+	port                          string
+	registerRoutesCallback        RegisterRoutesCallback
+	skipAuthRoutes                []string
+	version                       string
+	routingType                   string
+	registerStatusEndpoint        *bool
+	lambdaSize                    float64
+	lambdaCostPerMbPerMillisecond float64
 }
 
 func New(ctx context.Context, opts ...Option) (Service, error) {
@@ -82,6 +87,16 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	if os.Getenv("PORT") != "" {
 		opts = append([]Option{WithPort(os.Getenv("PORT"))}, opts...)
 	}
+	if os.Getenv(lambdaSizeMbEnv) != "" {
+		sizeFloat, err := strconv.ParseFloat(os.Getenv(lambdaSizeMbEnv), 64)
+		if err == nil {
+			opts = append([]Option{WithLambdaSize(sizeFloat)}, opts...)
+		} else {
+			// default lambda size
+			opts = append([]Option{WithLambdaSize(128)}, opts...)
+		}
+	}
+	opts = append([]Option{WithLambdaCostPerMbPerMs(lambdaCostPerMbMs)}, opts...)
 
 	gin.SetMode(gin.ReleaseMode)
 	gin.DefaultWriter = io.Discard
@@ -135,11 +150,15 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 func (s *service) GetMeta(c *gin.Context) ResultMeta {
 	ctx := c.Request.Context()
 	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
+	requestFinishedAt := time.Now()
+	requestTime := time.Since(requestStartedAt)
+	cost := s.lambdaSize * float64(requestTime.Milliseconds()) * s.lambdaCostPerMbPerMillisecond
 	return ResultMeta{
 		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
 		RequestStartedAt:  requestStartedAt,
-		RequestTime:       time.Since(requestStartedAt),
-		RequestFinishedAt: time.Now(),
+		RequestTime:       requestTime,
+		RequestFinishedAt: requestFinishedAt,
+		Cost:              cost,
 	}
 }
 
