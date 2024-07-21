@@ -13,10 +13,8 @@ import (
 )
 
 const (
-	RequestUIDKey      = "requestUID"
-	RequestStartedKey  = "requestStartedAt"
-	RequestFinishedKey = "requestFinishedAt"
-	RequestTimeKey     = "requestTime"
+	RequestUIDKey     = "requestUID"
+	RequestStartedKey = "requestStartedAt"
 )
 
 type ResultMeta struct {
@@ -67,18 +65,6 @@ func (s *service) Status() *Status {
 		Status: "running",
 	}
 	return &res
-}
-
-func (s *service) afterRequestMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-		ctx := c.Request.Context()
-
-		requestStarted := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
-		ctx = s.logger.WithValue(ctx, RequestFinishedKey, time.Now())
-		ctx = s.logger.WithValue(ctx, RequestTimeKey, time.Since(requestStarted))
-		c.Request = c.Request.WithContext(ctx)
-	}
 }
 
 func (s *service) requestUIDMiddleware() gin.HandlerFunc {

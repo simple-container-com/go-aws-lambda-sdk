@@ -103,7 +103,6 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	router.Use(gin.Recovery())
 	router.Use(s.requestUIDMiddleware())
 	router.Use(s.debugLogMiddleware())
-	router.Use(s.afterRequestMiddleware())
 	if s.apiKey != "" {
 		router.Use(s.apiKeyAuthMiddleware())
 	}
@@ -135,11 +134,11 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 
 func (s *service) GetMeta(c *gin.Context) ResultMeta {
 	ctx := c.Request.Context()
+	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
 	return ResultMeta{
-		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
-		RequestStartedAt:  s.logger.GetValue(ctx, RequestStartedKey).(time.Time),
-		RequestFinishedAt: s.logger.GetValue(ctx, RequestFinishedKey).(time.Time),
-		RequestTime:       s.logger.GetValue(ctx, RequestTimeKey).(time.Duration),
+		RequestUID:       s.logger.GetValue(ctx, RequestUIDKey).(string),
+		RequestStartedAt: requestStartedAt,
+		RequestTime:      time.Since(requestStartedAt),
 	}
 }
 
