@@ -19,18 +19,22 @@ import (
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
 
-var ginProxy Service
+var ginProxy *service
 
 const (
+	serviceVersionEnv            = "SIMPLE_CONTAINER_VERSION"
 	lambdaRoutingTypeEnv         = "SIMPLE_CONTAINER_AWS_LAMBDA_ROUTING_TYPE"
 	lambdaRoutingTypeFunctionUrl = "function-url"
 	lambdaRoutingTypeApiGw       = "api-gateway"
 )
 
 type Service interface {
-	Start(ctx context.Context) error
-	ProxyLambdaApiGateway(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error)
-	ProxyLambdaFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error)
+	Start() error
+	Logger() logger.Logger
+	IsLocalDebugMode() bool
+	IsRequestDebugEnabled() bool
+	Port() string
+	Version() string
 }
 
 type service struct {
@@ -47,9 +51,10 @@ type service struct {
 	registerRoutesCallback RegisterRoutesCallback
 	skipAuthRoutes         []string
 	version                string
+	routingType            string
 }
 
-func Init(ctx context.Context, opts ...Option) error {
+func New(ctx context.Context, opts ...Option) (Service, error) {
 	log := logger.NewLogger()
 
 	// stdout and stderr are sent to AWS CloudWatch Logs
@@ -61,7 +66,8 @@ func Init(ctx context.Context, opts ...Option) error {
 		opts = append([]Option{WithApiKey(apiKey)}, opts...)
 	}
 
-	opts = append([]Option{WithVersion(os.Getenv("SIMPLE_CONTAINER_VERSION"))}, opts...)
+	opts = append([]Option{WithVersion(os.Getenv(serviceVersionEnv))}, opts...)
+	opts = append([]Option{WithRoutingType(os.Getenv(lambdaRoutingTypeEnv))}, opts...)
 
 	if os.Getenv("REQUEST_DEBUG") != "" {
 		opts = append([]Option{WithRequestDebugMode()}, opts...)
@@ -77,80 +83,84 @@ func Init(ctx context.Context, opts ...Option) error {
 	gin.SetMode(gin.ReleaseMode)
 	gin.DefaultWriter = io.Discard
 
-	r := &service{
+	s := &service{
 		ctx: ctx,
 	}
 
 	for _, opt := range opts {
-		opt(r)
+		opt(s)
 	}
 
-	r.skipAuthRoutes = append(r.skipAuthRoutes, "/api/status")
+	s.skipAuthRoutes = append(s.skipAuthRoutes, "/api/status")
 
 	router := gin.New()
-	if r.registerRoutesCallback == nil {
-		return errors.Errorf("register routes callback is not set")
+	if s.registerRoutesCallback == nil {
+		return nil, errors.Errorf("register routes callback is not set")
 	}
 	router.Use(gin.Recovery())
-	router.Use(r.requestUIDMiddleware())
-	router.Use(r.debugLogMiddleware())
-	if r.apiKey != "" {
-		router.Use(r.apiKeyAuthMiddleware())
+	router.Use(s.requestUIDMiddleware())
+	router.Use(s.debugLogMiddleware())
+	if s.apiKey != "" {
+		router.Use(s.apiKeyAuthMiddleware())
 	}
-	router.GET("/api/status", r.statusEndpoint)
+	router.GET("/api/status", s.statusEndpoint)
 
-	if err := r.registerRoutesCallback(router); err != nil {
-		return errors.Wrapf(err, "failed to register routes")
+	if err := s.registerRoutesCallback(router); err != nil {
+		return nil, errors.Wrapf(err, "failed to register routes")
 	}
 
-	r.router = router
+	s.router = router
 
-	r.lambdaAdapter = ginadapter.New(router)
-	r.server = &http.Server{
-		Addr:    fmt.Sprintf("0.0.0.0:%s", lo.If(r.port != "", r.port).Else("8080")),
-		Handler: r.router,
+	s.lambdaAdapter = ginadapter.New(router)
+	s.server = &http.Server{
+		Addr:    fmt.Sprintf("0.0.0.0:%s", lo.If(s.port != "", s.port).Else("8080")),
+		Handler: s.router,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	r.cancels = append(r.cancels, cancel)
-	r.ctx = ctx
+	s.cancels = append(s.cancels, cancel)
+	s.ctx = ctx
 
-	r.logger = log
+	s.logger = log
 
-	ginProxy = r
+	ginProxy = s
+	return s, nil
+}
 
-	if r.localDebugMode {
-		if err := StartService(ctx); err != nil {
-			return err
-		}
+func (s *service) Start() error {
+	if s.localDebugMode {
+		return s.server.ListenAndServe()
 	} else {
-		routingType := os.Getenv(lambdaRoutingTypeEnv)
-		switch routingType {
+		switch s.routingType {
 		case lambdaRoutingTypeFunctionUrl:
-			lambda.Start(HandlerFunctionURL)
+			lambda.Start(ginProxy.ProxyLambdaFunctionURL)
 		case lambdaRoutingTypeApiGw:
-			lambda.Start(HandlerAPIGateway)
+			lambda.Start(ginProxy.ProxyLambdaApiGateway)
 		default:
-			return errors.Errorf("Unknown routing type: %q \n", routingType)
+			return errors.Errorf("Unknown routing type: %q \n", s.routingType)
 		}
 	}
 	return nil
 }
 
-func StartService(ctx context.Context) error {
-	return ginProxy.Start(ctx)
+func (s *service) Logger() logger.Logger {
+	return s.logger
 }
 
-func HandlerFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (response events.LambdaFunctionURLResponse, err error) {
-	return ginProxy.ProxyLambdaFunctionURL(ctx, request)
+func (s *service) IsLocalDebugMode() bool {
+	return s.localDebugMode
 }
 
-func HandlerAPIGateway(ctx context.Context, request events.APIGatewayProxyRequest) (response events.APIGatewayProxyResponse, err error) {
-	return ginProxy.ProxyLambdaApiGateway(ctx, request)
+func (s *service) IsRequestDebugEnabled() bool {
+	return s.requestDebugMode
 }
 
-func (s *service) Start(ctx context.Context) error {
-	return s.server.ListenAndServe()
+func (s *service) Port() string {
+	return s.port
+}
+
+func (s *service) Version() string {
+	return s.version
 }
 
 func (s *service) ProxyLambdaApiGateway(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
