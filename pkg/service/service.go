@@ -136,9 +136,10 @@ func (s *service) GetMeta(c *gin.Context) ResultMeta {
 	ctx := c.Request.Context()
 	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
 	return ResultMeta{
-		RequestUID:       s.logger.GetValue(ctx, RequestUIDKey).(string),
-		RequestStartedAt: requestStartedAt,
-		RequestTime:      time.Since(requestStartedAt),
+		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
+		RequestStartedAt:  requestStartedAt,
+		RequestTime:       time.Since(requestStartedAt),
+		RequestFinishedAt: time.Now(),
 	}
 }
 
