@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -35,6 +36,7 @@ type Service interface {
 	IsRequestDebugEnabled() bool
 	Port() string
 	Version() string
+	GetMeta(c *gin.Context) ResultMeta
 }
 
 type service struct {
@@ -101,6 +103,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	router.Use(gin.Recovery())
 	router.Use(s.requestUIDMiddleware())
 	router.Use(s.debugLogMiddleware())
+	router.Use(s.afterRequestMiddleware())
 	if s.apiKey != "" {
 		router.Use(s.apiKeyAuthMiddleware())
 	}
@@ -128,6 +131,16 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 
 	ginProxy = s
 	return s, nil
+}
+
+func (s *service) GetMeta(c *gin.Context) ResultMeta {
+	ctx := c.Request.Context()
+	return ResultMeta{
+		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
+		RequestStartedAt:  s.logger.GetValue(ctx, RequestStartedKey).(time.Time),
+		RequestFinishedAt: s.logger.GetValue(ctx, RequestFinishedKey).(time.Time),
+		RequestTime:       s.logger.GetValue(ctx, RequestTimeKey).(time.Duration),
+	}
 }
 
 func (s *service) Start() error {

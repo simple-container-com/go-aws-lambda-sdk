@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -12,12 +13,18 @@ import (
 )
 
 const (
-	RequestUIDKey = "requestUID"
+	RequestUIDKey      = "requestUID"
+	RequestStartedKey  = "requestStartedAt"
+	RequestFinishedKey = "requestFinishedAt"
+	RequestTimeKey     = "requestTime"
 )
 
 type ResultMeta struct {
-	Error      *string `json:"error,omitempty" yaml:"error,omitempty"` // whether error happened whilst processing
-	RequestUID string  `json:"jobUID" yaml:"jobUID"`                   // unique identifier of job for debugging purposes
+	Error             *string       `json:"error,omitempty" yaml:"error,omitempty"` // whether error happened whilst processing
+	RequestUID        string        `json:"requestUID" yaml:"requestUID"`           // unique identifier of job for debugging purposes
+	RequestStartedAt  time.Time     `json:"requestStartedAt" yaml:"requestStartedAt"`
+	RequestFinishedAt time.Time     `json:"requestFinishedAt" yaml:"requestFinishedAt"`
+	RequestTime       time.Duration `json:"requestTime" yaml:"requestTime"`
 }
 
 type Error struct {
@@ -62,6 +69,18 @@ func (s *service) Status() *Status {
 	return &res
 }
 
+func (s *service) afterRequestMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		ctx := c.Request.Context()
+
+		requestStarted := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
+		ctx = s.logger.WithValue(ctx, RequestFinishedKey, time.Now())
+		ctx = s.logger.WithValue(ctx, RequestTimeKey, time.Since(requestStarted))
+		c.Request = c.Request.WithContext(ctx)
+	}
+}
+
 func (s *service) requestUIDMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -71,7 +90,9 @@ func (s *service) requestUIDMiddleware() gin.HandlerFunc {
 			return
 		}
 		ctx = s.logger.WithValue(ctx, RequestUIDKey, requestUID.String())
+		ctx = s.logger.WithValue(ctx, RequestStartedKey, time.Now())
 		c.Request = c.Request.WithContext(ctx)
+		c.Next()
 	}
 }
 
@@ -96,6 +117,7 @@ func (s *service) debugLogMiddleware() gin.HandlerFunc {
 			s.logger.Infof(ctx, "got request")
 			c.Header("X-Request-UID", requestUID)
 		}
+		c.Next()
 	}
 }
 
