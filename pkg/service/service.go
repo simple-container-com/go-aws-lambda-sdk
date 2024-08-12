@@ -40,7 +40,10 @@ type Service interface {
 	Port() string
 	Version() string
 	GetMeta(c *gin.Context) ResultMeta
+	GinAdapter() *ginadapter.GinLambda
 }
+
+type StreamingResponseProcessor func(response events.APIGatewayProxyRequest) (events.LambdaFunctionURLStreamingResponse, error)
 
 type service struct {
 	ctx                           context.Context
@@ -60,6 +63,7 @@ type service struct {
 	registerStatusEndpoint        *bool
 	lambdaSize                    float64
 	lambdaCostPerMbPerMillisecond float64
+	streamingResponseProcessors   map[string]StreamingResponseProcessor
 }
 
 func New(ctx context.Context, opts ...Option) (Service, error) {
@@ -198,12 +202,20 @@ func (s *service) Version() string {
 	return s.version
 }
 
+func (s *service) GinAdapter() *ginadapter.GinLambda {
+	return s.lambdaAdapter
+}
+
 func (s *service) ProxyLambdaApiGateway(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	return s.lambdaAdapter.ProxyWithContext(ctx, request)
 }
 
-func (s *service) ProxyLambdaFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
-	res, err := s.lambdaAdapter.ProxyWithContext(ctx, awsutil.ToAPIGatewayRequest(request))
+func (s *service) ProxyLambdaFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (any, error) {
+	apiGwReq := awsutil.ToAPIGatewayRequest(request)
+	if proc, ok := s.streamingResponseProcessors[apiGwReq.Path]; ok {
+		return proc(apiGwReq)
+	}
+	res, err := s.lambdaAdapter.ProxyWithContext(ctx, apiGwReq)
 	if err != nil {
 		return events.LambdaFunctionURLResponse{}, errors.Wrapf(err, "failed to process request")
 	}
