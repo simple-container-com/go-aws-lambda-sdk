@@ -39,7 +39,7 @@ type Service interface {
 	IsRequestDebugEnabled() bool
 	Port() string
 	Version() string
-	GetMeta(c *gin.Context) ResultMeta
+	GetMeta(ctx context.Context) ResultMeta
 	GinAdapter() *ginadapter.GinLambda
 }
 
@@ -151,8 +151,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	return s, nil
 }
 
-func (s *service) GetMeta(c *gin.Context) ResultMeta {
-	ctx := c.Request.Context()
+func (s *service) GetMeta(ctx context.Context) ResultMeta {
 	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
 	requestFinishedAt := time.Now()
 	requestTime := time.Since(requestStartedAt)
