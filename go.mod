@@ -1,6 +1,6 @@
 module github.com/simple-container-com/go-aws-lambda-sdk
 
-go 1.22.5
+go 1.22
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0
