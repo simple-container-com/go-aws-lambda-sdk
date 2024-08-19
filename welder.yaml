@@ -46,12 +46,12 @@ tasks:
     runOn: host
     script:
       - go mod tidy
-      - ${project:root}/bin/gofumpt -l -w ./
-      - ${project:root}/bin/golangci-lint run --fix
+      - go run mvdan.cc/gofumpt@v0.6.0 -l -w ./
+      - go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1 run --fix --timeout 30s
   linters:
     runOn: host
     script:
-      - ${project:root}/bin/golangci-lint run --fast --timeout 5m
+      - go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1 run --fast --timeout 1m
   tag-release:
     runOn: host
     script:
