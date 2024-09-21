@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 
@@ -42,9 +43,7 @@ func ReadBytes(stream io.Reader) []byte {
 	return buf.Bytes()
 }
 
-func (s *service) reportStatus(c *gin.Context,
-	status *Status,
-) {
+func (s *service) reportStatus(c HttpAdapter, status *Status) {
 	c.JSON(http.StatusOK, gin.H{
 		"version": s.version,
 		"status":  status,
@@ -57,8 +56,9 @@ func (s *service) reportStatus(c *gin.Context,
 // @Produce json
 // @Success 200 {object} Status
 // @Router /api/status [get]
-func (s *service) statusEndpoint(c *gin.Context) {
+func (s *service) statusEndpoint(c HttpAdapter) error {
 	s.reportStatus(c, s.Status())
+	return nil
 }
 
 func (s *service) Status() *Status {
@@ -68,78 +68,78 @@ func (s *service) Status() *Status {
 	return &res
 }
 
-func (s *service) requestUIDMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
+func (s *service) requestUIDMiddleware() HttpAdapterHandler {
+	return func(c HttpAdapter) error {
+		ctx := c.Context()
 
 		requestUID, err := uuid.NewUUID()
 		if err != nil {
-			return
+			return err
 		}
 		ctx = s.logger.WithValue(ctx, RequestUIDKey, requestUID.String())
 		ctx = s.logger.WithValue(ctx, RequestStartedKey, time.Now())
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
+
+		c.SetContext(ctx)
+		return nil
 	}
 }
 
-func (s *service) debugLogMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+func (s *service) debugLogMiddleware() HttpAdapterHandler {
+	return func(c HttpAdapter) error {
 		if s.requestDebugMode {
-			requestUIDOrNil := s.logger.GetValue(c.Request.Context(), RequestUIDKey)
+			requestUIDOrNil := s.logger.GetValue(c.Context(), RequestUIDKey)
 			requestUID := "<nil>"
 			if requestUIDOrNil != nil {
 				requestUID = requestUIDOrNil.(string)
 			}
-			ctx := c.Request.Context()
+			ctx := c.Context()
 			ctx = s.logger.WithValue(ctx, "request", map[string]any{
-				"method":     c.Request.Method,
-				"requestURI": c.Request.RequestURI,
-				"headers":    c.Request.Header,
-				"host":       c.Request.Host,
-				"proto":      c.Request.Proto,
+				"method":     c.Request().Method,
+				"requestURI": c.Request().RequestURI,
+				"headers":    c.Request().Header,
+				"host":       c.Request().Host,
+				"proto":      c.Request().Proto,
 				"remoteIP":   c.RemoteIP(),
 				"requestUID": requestUID,
 			})
 			s.logger.Infof(ctx, "got request")
-			c.Header("X-Request-UID", requestUID)
+			c.SetHeader("X-Request-UID", requestUID)
 		}
-		c.Next()
+		return nil
 	}
 }
 
-func (s *service) apiKeyAuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+func (s *service) apiKeyAuthMiddleware() HttpAdapterHandler {
+	return func(c HttpAdapter) error {
 		if s.apiKey == "" {
 			s.logger.Errorf(s.ctx, "API_KEY is not configured")
 			s.respondUnauthorized(c)
-			return
+			return errors.Errorf("API_KEY is not configured")
 		}
 
 		if _, found := lo.Find(s.skipAuthRoutes, func(prefix string) bool {
-			return strings.HasPrefix(c.Request.RequestURI, prefix)
+			return strings.HasPrefix(c.Request().RequestURI, prefix)
 		}); found {
-			s.logger.Infof(s.ctx, "skip authorization for "+c.Request.RequestURI+" ... ")
-			c.Next()
-			return
+			s.logger.Infof(s.ctx, "skip authorization for "+c.Request().RequestURI+" ... ")
+			return nil
 		}
 
-		authHeader := c.Request.Header["Authorization"]
+		authHeader := c.Request().Header["Authorization"]
 		if len(authHeader) == 0 {
 			s.respondUnauthorized(c)
-			return
+			return errors.Errorf("Unauthorized")
 		} else if providedTokenParts := strings.Split(authHeader[0], " "); len(providedTokenParts) < 2 {
 			s.respondUnauthorized(c)
-			return
+			return errors.Errorf("Unauthorized")
 		} else if providedTokenParts[1] != s.apiKey {
 			s.respondUnauthorized(c)
-			return
+			return errors.Errorf("Unauthorized")
 		}
-		c.Next()
+		return nil
 	}
 }
 
-func (s *service) respondUnauthorized(c *gin.Context) {
+func (s *service) respondUnauthorized(c HttpAdapter) {
 	c.JSON(http.StatusUnauthorized, gin.H{"message": "authorization key is not provided"})
 	c.AbortWithStatus(http.StatusUnauthorized)
 }

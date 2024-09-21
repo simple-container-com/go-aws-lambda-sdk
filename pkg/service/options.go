@@ -1,7 +1,6 @@
 package service
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
@@ -9,8 +8,20 @@ import (
 
 type (
 	Option                 func(*service)
-	RegisterRoutesCallback func(router *gin.Engine) error
+	RegisterRoutesCallback func(router HttpAdapterRouter) error
 )
+
+func UseResponseStreaming(use bool) Option {
+	return func(s *service) {
+		s.useResponseStreaming = use
+	}
+}
+
+func WithHttpAdapterRouter(a HttpAdapterRouter) Option {
+	return func(s *service) {
+		s.httpRouter = a
+	}
+}
 
 func WithLogger(logger logger.Logger) Option {
 	return func(s *service) {
