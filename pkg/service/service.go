@@ -142,6 +142,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		s.httpRouter = GinRouter(ginRouter, s.logger, s.localDebugMode)
 		ginRouter.Use(gin.Recovery())
 		s.lambdaAdapter = ginadapter.New(ginRouter)
+		router = ginRouter
 		switch s.routingType {
 		case lambdaRoutingTypeFunctionUrl:
 			s.lambdaStartFunc = ginProxy.ProxyLambdaFunctionURL
