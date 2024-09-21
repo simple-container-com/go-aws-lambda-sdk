@@ -27,8 +27,6 @@ import (
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
 
-var ginProxy *service
-
 const (
 	serviceVersionEnv            = "SIMPLE_CONTAINER_VERSION"
 	lambdaRoutingTypeEnv         = "SIMPLE_CONTAINER_AWS_LAMBDA_ROUTING_TYPE"
@@ -156,7 +154,6 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 			}
 		})
 		ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
-		ginProxy = s
 	}
 
 	s.server = &http.Server{
@@ -188,7 +185,6 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 
 	s.logger = log
 
-	ginProxy = s
 	return s, nil
 }
 
