@@ -90,7 +90,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		opts = append([]Option{WithRequestDebugMode()}, opts...)
 	}
 
-	if os.Getenv("LOCAL_DEBUG") != "" {
+	if os.Getenv("LOCAL_DEBUG") == "true" {
 		opts = append([]Option{WithLocalDebugMode()}, opts...)
 	}
 	if os.Getenv("PORT") != "" {
