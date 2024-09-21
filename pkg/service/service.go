@@ -15,6 +15,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	echoSwagger "github.com/swaggo/echo-swagger"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -133,6 +136,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		router = echoRouter
 		s.httpRouter = EchoRouter(echoRouter, s.logger, s.localDebugMode)
 		s.lambdaStartFunc = echohandler.NewFunctionURLStreamingHandler(echoadapter.NewEchoAdapter(echoRouter))
+		echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
 	} else if s.httpRouter == nil {
 		ginRouter := gin.New()
 		s.httpRouter = GinRouter(ginRouter, s.logger, s.localDebugMode)
@@ -146,6 +150,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		default:
 			return nil, errors.Errorf("Unknown routing type: %q \n", s.routingType)
 		}
+		ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	}
 
 	s.server = &http.Server{
