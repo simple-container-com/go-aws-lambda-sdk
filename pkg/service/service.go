@@ -150,6 +150,11 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		default:
 			return nil, errors.Errorf("Unknown routing type: %q \n", s.routingType)
 		}
+		ginRouter.Use(func(c *gin.Context) {
+			if c.Request.RequestURI == "/api/swagger" || c.Request.RequestURI == "/api/swagger/" {
+				c.Request.RequestURI = "/api/swagger/index.html"
+			}
+		})
 		ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	}
 
