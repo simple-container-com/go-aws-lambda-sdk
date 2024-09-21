@@ -126,6 +126,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 
 	var router http.Handler
 	if s.httpRouter == nil && s.useResponseStreaming {
+		log.Infof(ctx, "setting up echo router")
 		echoRouter, err := s.initEchoAdapter()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init echo router")
@@ -135,6 +136,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		s.lambdaStartFunc = echohandler.NewFunctionURLStreamingHandler(echoadapter.NewEchoAdapter(echoRouter))
 		echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
 	} else if s.httpRouter == nil {
+		log.Infof(ctx, "setting up gin router")
 		ginRouter := gin.New()
 		s.httpRouter = GinRouter(ginRouter, s.logger, s.localDebugMode)
 		ginRouter.Use(gin.Recovery())
@@ -244,11 +246,17 @@ func (s *service) GinAdapter() *ginadapter.GinLambda {
 }
 
 func (s *service) ProxyLambdaApiGateway(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	if s.lambdaAdapter == nil {
+		return events.APIGatewayProxyResponse{}, errors.Errorf("lambda adapter is not configure, are you using gin adapter?")
+	}
 	return s.lambdaAdapter.ProxyWithContext(ctx, request)
 }
 
 func (s *service) ProxyLambdaFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (any, error) {
 	apiGwReq := awsutil.ToAPIGatewayRequest(request)
+	if s.lambdaAdapter == nil {
+		return events.APIGatewayProxyResponse{}, errors.Errorf("lambda adapter is not configure, are you using gin adapter?")
+	}
 	res, err := s.lambdaAdapter.ProxyWithContext(ctx, apiGwReq)
 	if err != nil {
 		return events.LambdaFunctionURLResponse{}, errors.Wrapf(err, "failed to process request")
