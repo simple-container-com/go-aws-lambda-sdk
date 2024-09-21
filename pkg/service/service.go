@@ -120,7 +120,8 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	gin.DefaultWriter = io.Discard
 
 	s := &service{
-		ctx: ctx,
+		ctx:                         ctx,
+		streamingResponseProcessors: make(map[string]StreamingResponseProcessor),
 	}
 
 	for _, opt := range opts {
