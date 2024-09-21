@@ -77,12 +77,6 @@ func WithLambdaSize(size float64) Option {
 	}
 }
 
-func WithStreamingResponseProcessors(procs map[string]StreamingResponseProcessor) Option {
-	return func(s *service) {
-		s.streamingResponseProcessors = procs
-	}
-}
-
 func WithRequestDebugMode() Option {
 	return func(s *service) {
 		s.requestDebugMode = true

@@ -49,8 +49,6 @@ type Service interface {
 	GinAdapter() *ginadapter.GinLambda
 }
 
-type StreamingResponseProcessor func(response events.APIGatewayProxyRequest) (events.LambdaFunctionURLStreamingResponse, error)
-
 type service struct {
 	ctx                           context.Context
 	apiKey                        string
@@ -70,7 +68,6 @@ type service struct {
 	lambdaStartFunc               any
 	lambdaSize                    float64
 	lambdaCostPerMbPerMillisecond float64
-	streamingResponseProcessors   map[string]StreamingResponseProcessor
 	useResponseStreaming          bool
 }
 
@@ -120,8 +117,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	gin.DefaultWriter = io.Discard
 
 	s := &service{
-		ctx:                         ctx,
-		streamingResponseProcessors: make(map[string]StreamingResponseProcessor),
+		ctx: ctx,
 	}
 
 	for _, opt := range opts {
@@ -253,9 +249,6 @@ func (s *service) ProxyLambdaApiGateway(ctx context.Context, request events.APIG
 
 func (s *service) ProxyLambdaFunctionURL(ctx context.Context, request events.LambdaFunctionURLRequest) (any, error) {
 	apiGwReq := awsutil.ToAPIGatewayRequest(request)
-	if proc, ok := s.streamingResponseProcessors[apiGwReq.Path]; ok {
-		return proc(apiGwReq)
-	}
 	res, err := s.lambdaAdapter.ProxyWithContext(ctx, apiGwReq)
 	if err != nil {
 		return events.LambdaFunctionURLResponse{}, errors.Wrapf(err, "failed to process request")
