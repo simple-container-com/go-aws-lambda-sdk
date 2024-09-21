@@ -144,9 +144,9 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		router = ginRouter
 		switch s.routingType {
 		case lambdaRoutingTypeFunctionUrl:
-			s.lambdaStartFunc = ginProxy.ProxyLambdaFunctionURL
+			s.lambdaStartFunc = s.ProxyLambdaFunctionURL
 		case lambdaRoutingTypeApiGw:
-			s.lambdaStartFunc = ginProxy.ProxyLambdaApiGateway
+			s.lambdaStartFunc = s.ProxyLambdaApiGateway
 		default:
 			return nil, errors.Errorf("Unknown routing type: %q \n", s.routingType)
 		}
@@ -156,6 +156,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 			}
 		})
 		ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+		ginProxy = s
 	}
 
 	s.server = &http.Server{
