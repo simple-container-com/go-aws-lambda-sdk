@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
@@ -43,12 +44,27 @@ type HttpAdapter interface {
 	Request() *http.Request
 	AbortWithStatus(status int)
 	RemoteIP() string
+	Query(name string) string
+	FormFile(name string) (*multipart.FileHeader, error)
+	MultipartForm() (*multipart.Form, error)
 }
 
 type ginAdapter struct {
 	c          *gin.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (g *ginAdapter) Query(name string) string {
+	return g.c.Query(name)
+}
+
+func (g *ginAdapter) FormFile(name string) (*multipart.FileHeader, error) {
+	return g.c.FormFile(name)
+}
+
+func (g *ginAdapter) MultipartForm() (*multipart.Form, error) {
+	return g.c.MultipartForm()
 }
 
 func (g *ginAdapter) SetContext(ctx context.Context) {
@@ -67,6 +83,18 @@ type echoAdapter struct {
 	c          echo.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (e *echoAdapter) Query(name string) string {
+	return e.c.QueryParam(name)
+}
+
+func (e *echoAdapter) FormFile(name string) (*multipart.FileHeader, error) {
+	return e.c.FormFile(name)
+}
+
+func (e *echoAdapter) MultipartForm() (*multipart.Form, error) {
+	return e.c.MultipartForm()
 }
 
 func (e *echoAdapter) SetContext(ctx context.Context) {
