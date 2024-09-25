@@ -45,6 +45,7 @@ type HttpAdapter interface {
 	AbortWithStatus(status int)
 	RemoteIP() string
 	Query(name string) string
+	Param(name string) string
 	FormFile(name string) (*multipart.FileHeader, error)
 	MultipartForm() (*multipart.Form, error)
 }
@@ -53,6 +54,10 @@ type ginAdapter struct {
 	c          *gin.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (g *ginAdapter) Param(name string) string {
+	return g.c.Param(name)
 }
 
 func (g *ginAdapter) Query(name string) string {
@@ -83,6 +88,10 @@ type echoAdapter struct {
 	c          echo.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (e *echoAdapter) Param(name string) string {
+	return e.c.Param(name)
 }
 
 func (e *echoAdapter) Query(name string) string {
