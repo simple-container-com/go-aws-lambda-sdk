@@ -28,6 +28,7 @@ type HttpAdapterRouter interface {
 	PUT(p string, h HttpAdapterHandler)
 	OPTIONS(p string, h HttpAdapterHandler)
 	HEAD(p string, h HttpAdapterHandler)
+	Group(name string) HttpAdapterRouter
 }
 
 type HttpAdapterHandler func(h HttpAdapter) error
@@ -147,7 +148,7 @@ func GinAdapter(callback func(c HttpAdapter) error, logger logger.Logger, localD
 	}
 }
 
-func GinRouter(engine *gin.Engine, logger logger.Logger, debugMode bool) HttpAdapterRouter {
+func GinRouter(engine gin.IRouter, logger logger.Logger, debugMode bool) HttpAdapterRouter {
 	return &ginRouter{
 		router:     engine,
 		localDebug: debugMode,
@@ -176,9 +177,13 @@ func (g *ginRouter) Use(mw HttpAdapterHandler) {
 }
 
 type ginRouter struct {
-	router     *gin.Engine
+	router     gin.IRouter
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (g *ginRouter) Group(name string) HttpAdapterRouter {
+	return GinRouter(g.router.Group(name), g.logger, g.localDebug)
 }
 
 func (g *ginRouter) Any(p string, h HttpAdapterHandler) {
@@ -224,6 +229,71 @@ type echoRouter struct {
 	router     *echo.Echo
 	localDebug bool
 	logger     logger.Logger
+}
+
+type echoGroup struct {
+	router     *echo.Group
+	localDebug bool
+	logger     logger.Logger
+}
+
+func (e *echoGroup) Group(name string) HttpAdapterRouter {
+	return &echoGroup{
+		router:     e.router.Group(name),
+		localDebug: e.localDebug,
+		logger:     e.logger,
+	}
+}
+
+func (e *echoRouter) Group(prefix string) HttpAdapterRouter {
+	return &echoGroup{
+		router:     e.router.Group(prefix),
+		localDebug: e.localDebug,
+		logger:     e.logger,
+	}
+}
+
+func (e *echoGroup) Any(p string, h HttpAdapterHandler) {
+	e.router.Any(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) GET(p string, h HttpAdapterHandler) {
+	e.router.GET(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) POST(p string, h HttpAdapterHandler) {
+	e.router.POST(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) DELETE(p string, h HttpAdapterHandler) {
+	e.router.DELETE(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) PATCH(p string, h HttpAdapterHandler) {
+	e.router.PATCH(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) PUT(p string, h HttpAdapterHandler) {
+	e.router.PUT(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) OPTIONS(p string, h HttpAdapterHandler) {
+	e.router.OPTIONS(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) HEAD(p string, h HttpAdapterHandler) {
+	e.router.HEAD(p, EchoAdapter(h, e.logger, e.localDebug))
+}
+
+func (e *echoGroup) Use(mw HttpAdapterHandler) {
+	e.router.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if err := EchoAdapter(mw, e.logger, e.localDebug)(c); err != nil {
+				return err
+			}
+			return next(c)
+		}
+	})
 }
 
 func (e *echoRouter) Any(p string, h HttpAdapterHandler) {
