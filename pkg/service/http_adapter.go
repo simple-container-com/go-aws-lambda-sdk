@@ -48,12 +48,18 @@ type HttpAdapter interface {
 	Param(name string) string
 	FormFile(name string) (*multipart.FileHeader, error)
 	MultipartForm() (*multipart.Form, error)
+	Redirect(code int, location string) error
 }
 
 type ginAdapter struct {
 	c          *gin.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (g *ginAdapter) Redirect(code int, location string) error {
+	g.c.Redirect(code, location)
+	return nil
 }
 
 func (g *ginAdapter) Param(name string) string {
@@ -88,6 +94,10 @@ type echoAdapter struct {
 	c          echo.Context
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (e *echoAdapter) Redirect(code int, location string) error {
+	return e.c.Redirect(code, location)
 }
 
 func (e *echoAdapter) Param(name string) string {
