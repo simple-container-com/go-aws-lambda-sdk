@@ -118,6 +118,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		ctx: ctx,
 	}
 
+	s.logger = log
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -182,8 +183,6 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancels = append(s.cancels, cancel)
 	s.ctx = ctx
-
-	s.logger = log
 
 	return s, nil
 }
