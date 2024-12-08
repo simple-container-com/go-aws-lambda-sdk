@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"mime/multipart"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
 )
@@ -17,6 +19,7 @@ import (
 type HttpWriterFlusher interface {
 	http.ResponseWriter
 	http.Flusher
+	http.Hijacker
 }
 
 type HttpAdapterRouter interface {
@@ -144,6 +147,14 @@ type withEchoFlusher struct {
 	http.ResponseWriter
 	c          echo.Context
 	localDebug bool
+}
+
+func (w *withEchoFlusher) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return hijacker.Hijack()
+	} else {
+		return nil, nil, errors.Errorf("ResponseWriter does not implement http.Hijacker")
+	}
 }
 
 func (w *withEchoFlusher) Flush() {
