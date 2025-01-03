@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	echoadapter "github.com/its-felix/aws-lam
 	echoadapter "github.com/its-felix/aws-lambda-go-http-adapter/adapter"
-	echohandler "github.com/its-felix/aws-lambda-go-http-adapter/handler"
+	"github.com/gin-gonic/gin"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -132,7 +133,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		}
 		router = echoRouter
 		s.httpRouter = EchoRouter(echoRouter, s.logger, s.localDebugMode)
-		s.lambdaStartFunc = echohandler.NewFunctionURLStreamingHandler(echoadapter.NewEchoAdapter(echoRouter))
+		s.lambdaStartFunc = s.newEchoLambdaStartFunc(echoRouter)
 		echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
 	} else if s.httpRouter == nil {
 		log.Infof(ctx, "setting up gin router")
@@ -185,6 +186,16 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	s.ctx = ctx
 
 	return s, nil
+}
+
+func (s *service) newEchoLambdaStartFunc(echoRouter *echo.Echo) func(context.Context, events.LambdaFunctionURLRequest) (*events.LambdaFunctionURLStreamingResponse, error) {
+	delegate := echohandler.NewFunctionURLStreamingHandler(echoadapter.NewEchoAdapter(echoRouter))
+	return func(ctx context.Context, request events.LambdaFunctionURLRequest) (*events.LambdaFunctionURLStreamingResponse, error) {
+		if s.requestDebugMode {
+			s.Logger().Infof(s.Logger().WithValue(ctx, "lambdaEvent", request), "got lambda event")
+		}
+		return delegate(ctx, request)
+	}
 }
 
 func (s *service) initEchoAdapter() (*echo.Echo, error) {
