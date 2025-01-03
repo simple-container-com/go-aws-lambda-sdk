@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	echoadapter "github.com/its-felix/aws-lam
 	echoadapter "github.com/its-felix/aws-lambda-go-http-adapter/adapter"
-	"github.com/gin-gonic/gin"
+	echohandler "github.com/its-felix/aws-lambda-go-http-adapter/handler"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
