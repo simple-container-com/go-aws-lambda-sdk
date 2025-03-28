@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	echoadapter "github.com/its-felix/aws-lambda-go-http-adapter/adapter"
 	echohandler "github.com/its-felix/aws-lambda-go-http-adapter/handler"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	echoSwagger "github.com/swaggo/echo-swagger"

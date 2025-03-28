@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
@@ -33,6 +33,7 @@ type HttpAdapterRouter interface {
 	OPTIONS(p string, h HttpAdapterHandler)
 	HEAD(p string, h HttpAdapterHandler)
 	Group(name string) HttpAdapterRouter
+	NoRoute(h HttpAdapterHandler)
 }
 
 type HttpAdapterHandler func(h HttpAdapter) error
@@ -240,6 +241,12 @@ type ginRouter struct {
 	logger     logger.Logger
 }
 
+func (g *ginRouter) NoRoute(h HttpAdapterHandler) {
+	if router, ok := g.router.(*gin.Engine); ok {
+		router.NoRoute(GinAdapter(h, g.logger, g.localDebug))
+	}
+}
+
 func (g *ginRouter) Group(name string) HttpAdapterRouter {
 	return GinRouter(g.router.Group(name), g.logger, g.localDebug)
 }
@@ -289,10 +296,18 @@ type echoRouter struct {
 	logger     logger.Logger
 }
 
+func (e *echoRouter) NoRoute(h HttpAdapterHandler) {
+	e.router.RouteNotFound("/*", EchoAdapter(h, e.logger, e.localDebug))
+}
+
 type echoGroup struct {
 	router     *echo.Group
 	localDebug bool
 	logger     logger.Logger
+}
+
+func (e *echoGroup) NoRoute(h HttpAdapterHandler) {
+	e.router.RouteNotFound("/*", EchoAdapter(h, e.logger, e.localDebug))
 }
 
 func (e *echoGroup) Group(name string) HttpAdapterRouter {
