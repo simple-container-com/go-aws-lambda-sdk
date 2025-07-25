@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -22,6 +23,43 @@ const (
 	Warn  = "WARN"
 )
 
+// Sink represents a log output destination
+type Sink interface {
+	Write(msg Message) error
+}
+
+// ConsoleSink writes logs to stdout/stderr
+type ConsoleSink struct{}
+
+func (s ConsoleSink) Write(msg Message) error {
+	jsonOutput, err := json.Marshal(msg)
+	printer := os.Stdout
+	if msg.Level == Error {
+		printer = os.Stderr
+	}
+	if err != nil {
+		_, writeErr := printer.WriteString(fmt.Sprintf(`{"level":"%s","message":"%s","context":{"error":"%s"}}`, msg.Level, msg.Message, err.Error()) + "\n")
+		return writeErr
+	}
+	_, writeErr := printer.WriteString(string(jsonOutput) + "\n")
+	return writeErr
+}
+
+// WriterSink writes logs to any io.Writer
+type WriterSink struct {
+	Writer io.Writer
+}
+
+func (s WriterSink) Write(msg Message) error {
+	jsonOutput, err := json.Marshal(msg)
+	if err != nil {
+		_, writeErr := s.Writer.Write([]byte(fmt.Sprintf(`{"level":"%s","message":"%s","context":{"error":"%s"}}`, msg.Level, msg.Message, err.Error()) + "\n"))
+		return writeErr
+	}
+	_, writeErr := s.Writer.Write(append(jsonOutput, '\n'))
+	return writeErr
+}
+
 type Logger interface {
 	Infof(ctx context.Context, format string, args ...any)
 	Errorf(ctx context.Context, format string, args ...any)
@@ -29,9 +67,15 @@ type Logger interface {
 	WithValue(ctx context.Context, key string, value any) context.Context
 	WithValues(ctx context.Context, values map[string]any) context.Context
 	GetValue(ctx context.Context, key string) any
+	// New methods for sink management
+	AddSink(sink Sink)
+	RemoveSink(sink Sink)
+	GetSinks() []Sink
 }
 
-type logger struct{}
+type logger struct {
+	sinks []Sink
+}
 
 type Message struct {
 	Date    string       `json:"date"`
@@ -41,10 +85,32 @@ type Message struct {
 }
 
 func NewLogger() Logger {
-	return &logger{}
+	return &logger{
+		sinks: []Sink{ConsoleSink{}}, // Default to console output for backward compatibility
+	}
 }
 
-func (l logger) GetValue(ctx context.Context, key string) any {
+func NewLoggerWithSinks(sinks ...Sink) Logger {
+	return &logger{
+		sinks: sinks,
+	}
+}
+
+func (l *logger) AddSink(sink Sink) {
+	l.sinks = append(l.sinks, sink)
+}
+
+func (l *logger) RemoveSink(sink Sink) {
+	l.sinks = lo.Filter(l.sinks, func(s Sink, _ int) bool {
+		return s != sink
+	})
+}
+
+func (l *logger) GetSinks() []Sink {
+	return l.sinks
+}
+
+func (l *logger) GetValue(ctx context.Context, key string) any {
 	ctxValueOrNil := ctx.Value(contextValueKey)
 	if ctxValueOrNil == nil {
 		return nil
@@ -52,14 +118,14 @@ func (l logger) GetValue(ctx context.Context, key string) any {
 	return ctxValueOrNil.(ContextValue)[key]
 }
 
-func (l logger) WithValues(ctx context.Context, values map[string]any) context.Context {
+func (l *logger) WithValues(ctx context.Context, values map[string]any) context.Context {
 	for k, v := range values {
 		ctx = l.WithValue(ctx, k, v)
 	}
 	return ctx
 }
 
-func (l logger) WithValue(ctx context.Context, key string, value any) context.Context {
+func (l *logger) WithValue(ctx context.Context, key string, value any) context.Context {
 	currentValue, ok := ctx.Value(contextValueKey).(ContextValue)
 	if ok {
 		newValue := lo.Assign(currentValue)
@@ -69,19 +135,19 @@ func (l logger) WithValue(ctx context.Context, key string, value any) context.Co
 	return context.WithValue(ctx, contextValueKey, ContextValue{key: value})
 }
 
-func (l logger) Infof(ctx context.Context, format string, args ...any) {
+func (l *logger) Infof(ctx context.Context, format string, args ...any) {
 	l.printWithLevel(ctx, format, args, Info)
 }
 
-func (l logger) Warnf(ctx context.Context, format string, args ...any) {
+func (l *logger) Warnf(ctx context.Context, format string, args ...any) {
 	l.printWithLevel(ctx, format, args, Warn)
 }
 
-func (l logger) Errorf(ctx context.Context, format string, args ...any) {
+func (l *logger) Errorf(ctx context.Context, format string, args ...any) {
 	l.printWithLevel(ctx, format, args, Error)
 }
 
-func (l logger) printWithLevel(ctx context.Context, format string, args []any, level string) {
+func (l *logger) printWithLevel(ctx context.Context, format string, args []any, level string) {
 	ctxValueOrNil := ctx.Value(contextValueKey)
 	contextValue := ContextValue{}
 	if ctxValueOrNil != nil {
@@ -94,13 +160,12 @@ func (l logger) printWithLevel(ctx context.Context, format string, args []any, l
 		Message: message,
 		Context: contextValue,
 	}
-	jsonOutput, err := json.Marshal(msg)
-	printer := os.Stdout
-	if level == Error {
-		printer = os.Stderr
+
+	// Write to all registered sinks
+	for _, sink := range l.sinks {
+		if err := sink.Write(msg); err != nil {
+			// If writing to a sink fails, write error to stderr as fallback
+			_, _ = fmt.Fprintf(os.Stderr, "Logger sink error: %v\n", err)
+		}
 	}
-	if err != nil {
-		_, _ = printer.WriteString(fmt.Sprintf(`{"level":"%s","message":"%s","context":{"error":"%s"}}`, level, message, err.Error()) + "\n")
-	}
-	_, _ = printer.WriteString(string(jsonOutput) + "\n")
 }

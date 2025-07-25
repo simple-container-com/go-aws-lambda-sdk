@@ -14,12 +14,16 @@ profiles:
   skip-test:
     activation:
       skip-tests: true
+    build:
+      env:
+        SKIP_TESTS: "true"
 modules:
   - name: go-aws-lambda-sdk
     build:
       steps:
         - task: tools
         - task: linters
+        - task: test
     deploy:
       environments:
         prod:
@@ -48,6 +52,10 @@ tasks:
       - go mod tidy
       - ${project:root}/bin/gofumpt -l -w ./
       - ${project:root}/bin/golangci-lint run --fix
+  test:
+    runOn: host
+    script:
+      - if [ "${SKIP_TESTS}" != 'true' ]; then go test ./...; else echo "Skipping tests"; fi
   linters:
     runOn: host
     script:
