@@ -165,7 +165,15 @@ func (l *logger) printWithLevel(ctx context.Context, format string, args []any, 
 	for _, sink := range l.sinks {
 		if err := sink.Write(msg); err != nil {
 			// If writing to a sink fails, write error to stderr as fallback
-			_, _ = fmt.Fprintf(os.Stderr, "Logger sink error: %v\n", err)
+			err2 := l.sinks[0].Write(Message{
+				Date:    time.Now().Format(time.DateTime),
+				Level:   Error,
+				Message: "Logger sink error",
+				Context: ContextValue{"error": err.Error()},
+			})
+			if err2 != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Logger sink error: %v\n", err)
+			}
 		}
 	}
 }
