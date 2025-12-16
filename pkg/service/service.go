@@ -207,7 +207,10 @@ func (s *service) GetMeta(ctx context.Context) ResultMeta {
 	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
 	requestFinishedAt := time.Now()
 	requestTime := time.Since(requestStartedAt)
-	isAuthorized := s.logger.GetValue(ctx, IsAuthorizedKey).(bool)
+	isAuthorized := false
+	if isAuthorizedValue := s.logger.GetValue(ctx, IsAuthorizedKey); isAuthorizedValue != nil {
+		isAuthorized = isAuthorizedValue.(bool)
+	}
 	cost := s.lambdaSize * float64(requestTime.Milliseconds()) * s.lambdaCostPerMbPerMillisecond
 	return ResultMeta{
 		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
