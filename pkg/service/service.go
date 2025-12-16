@@ -171,6 +171,7 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	s.httpRouter.Use(s.debugLogMiddleware())
 	if s.apiKey != "" {
 		s.httpRouter.Use(s.apiKeyAuthMiddleware())
+		s.httpRouter.Use(s.tryApiKeyAuthMiddleware())
 	}
 	if s.registerStatusEndpoint == nil || lo.FromPtr(s.registerStatusEndpoint) {
 		s.httpRouter.GET("/api/status", s.statusEndpoint)
@@ -206,12 +207,14 @@ func (s *service) GetMeta(ctx context.Context) ResultMeta {
 	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
 	requestFinishedAt := time.Now()
 	requestTime := time.Since(requestStartedAt)
+	isAuthorized := s.logger.GetValue(ctx, IsAuthorizedKey).(bool)
 	cost := s.lambdaSize * float64(requestTime.Milliseconds()) * s.lambdaCostPerMbPerMillisecond
 	return ResultMeta{
 		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
 		RequestStartedAt:  requestStartedAt,
 		RequestTime:       requestTime,
 		RequestFinishedAt: requestFinishedAt,
+		IsAuthorized:      isAuthorized,
 		Cost:              cost,
 	}
 }
