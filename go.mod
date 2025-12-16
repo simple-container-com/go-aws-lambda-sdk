@@ -1,6 +1,6 @@
 module github.com/simple-container-com/go-aws-lambda-sdk
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.1
 
@@ -19,10 +19,10 @@ require (
 	github.com/swaggo/echo-swagger v1.4.1
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
-	github.com/swaggo/swag v1.16.4
-	github.com/vektra/mockery/v2 v2.53.3
-	golang.org/x/sync v0.12.0
-	mvdan.cc/gofumpt v0.7.0
+	github.com/swaggo/swag v1.16.6
+	github.com/vektra/mockery/v2 v2.53.5
+	golang.org/x/sync v0.17.0
+	mvdan.cc/gofumpt v0.9.2
 )
 
 require (
@@ -241,14 +241,16 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
-	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
-	golang.org/x/tools v0.31.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
+	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

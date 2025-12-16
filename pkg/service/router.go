@@ -16,6 +16,7 @@ import (
 const (
 	RequestUIDKey     = "requestUID"
 	RequestStartedKey = "requestStartedAt"
+	IsAuthorizedKey   = "isAuthorized"
 )
 
 type ResultMeta struct {
@@ -24,6 +25,7 @@ type ResultMeta struct {
 	RequestStartedAt  time.Time     `json:"requestStartedAt" yaml:"requestStartedAt"`
 	RequestFinishedAt time.Time     `json:"requestFinishedAt" yaml:"requestFinishedAt"`
 	RequestTime       time.Duration `json:"requestTime" yaml:"requestTime"`
+	IsAuthorized      bool          `json:"isAuthorized" yaml:"isAuthorized"`
 	Cost              float64       `json:"cost" yaml:"cost"`
 }
 
@@ -111,35 +113,52 @@ func (s *service) debugLogMiddleware() HttpAdapterHandler {
 
 func (s *service) apiKeyAuthMiddleware() HttpAdapterHandler {
 	return func(c HttpAdapter) error {
-		if s.apiKey == "" {
-			s.logger.Errorf(s.ctx, "API_KEY is not configured")
+		err := s.checkAuthorized(c, true)
+		if err != nil {
 			s.respondUnauthorized(c)
-			return errors.Errorf("API_KEY is not configured")
 		}
-
-		if _, found := lo.Find(s.skipAuthRoutes, func(prefix string) bool {
-			return strings.HasPrefix(c.Request().RequestURI, prefix)
-		}); found {
-			s.logger.Infof(s.ctx, "skip authorization for "+c.Request().RequestURI+" ... ")
-			return nil
-		}
-
-		authHeader := c.Request().Header["Authorization"]
-		if len(authHeader) == 0 {
-			s.respondUnauthorized(c)
-			return errors.Errorf("Unauthorized")
-		} else if providedTokenParts := strings.Split(authHeader[0], " "); len(providedTokenParts) < 2 {
-			s.respondUnauthorized(c)
-			return errors.Errorf("Unauthorized")
-		} else if providedTokenParts[1] != s.apiKey {
-			s.respondUnauthorized(c)
-			return errors.Errorf("Unauthorized")
-		}
-		return nil
+		return err
 	}
 }
 
 func (s *service) respondUnauthorized(c HttpAdapter) {
 	c.JSON(http.StatusUnauthorized, gin.H{"message": "authorization key is not provided"})
 	c.AbortWithStatus(http.StatusUnauthorized)
+}
+
+func (s *service) tryApiKeyAuthMiddleware() HttpAdapterHandler {
+	return func(c HttpAdapter) error {
+		err := s.checkAuthorized(c, false)
+		isAuthorized := err == nil
+		ctx := c.Context()
+		ctx = s.logger.WithValue(ctx, IsAuthorizedKey, isAuthorized)
+		c.SetContext(ctx)
+		return nil
+	}
+}
+
+func (s *service) checkAuthorized(c HttpAdapter, skipAuth bool) error {
+	if s.apiKey == "" {
+		s.logger.Errorf(s.ctx, "API_KEY is not configured")
+		return errors.Errorf("API_KEY is not configured")
+	}
+
+	if skipAuth {
+		if _, found := lo.Find(s.skipAuthRoutes, func(prefix string) bool {
+			return strings.HasPrefix(c.Request().RequestURI, prefix)
+		}); found {
+			s.logger.Infof(s.ctx, "skip authorization for "+c.Request().RequestURI+" ... ")
+			return nil
+		}
+	}
+
+	authHeader := c.Request().Header["Authorization"]
+	if len(authHeader) == 0 {
+		return errors.Errorf("Unauthorized")
+	} else if providedTokenParts := strings.Split(authHeader[0], " "); len(providedTokenParts) < 2 {
+		return errors.Errorf("Unauthorized")
+	} else if providedTokenParts[1] != s.apiKey {
+		return errors.Errorf("Unauthorized")
+	}
+	return nil
 }
