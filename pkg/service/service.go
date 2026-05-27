@@ -67,6 +67,7 @@ type service struct {
 	lambdaSize                    float64
 	lambdaCostPerMbPerMillisecond float64
 	useResponseStreaming          bool
+	vanillaHandler                http.Handler
 }
 
 func New(ctx context.Context, opts ...Option) (Service, error) {
@@ -121,6 +122,24 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	s.logger = log
 	for _, opt := range opts {
 		opt(s)
+	}
+
+	// Vanilla escape hatch: a plain http.Handler owns routing, middleware,
+	// and auth. Skip the echo/gin router, SDK middleware, /api/status,
+	// swagger, and the RegisterRoutes requirement; just bind the handler to
+	// the same its-felix Function URL start path the echo router uses.
+	if s.vanillaHandler != nil {
+		s.server = &http.Server{
+			Addr:    fmt.Sprintf("0.0.0.0:%s", lo.If(s.port != "", s.port).Else("8080")),
+			Handler: s.vanillaHandler,
+		}
+		adapter := echoadapter.NewVanillaAdapter(s.vanillaHandler)
+		if s.useResponseStreaming {
+			s.lambdaStartFunc = echohandler.NewFunctionURLStreamingHandler(adapter)
+		} else {
+			s.lambdaStartFunc = echohandler.NewFunctionURLHandler(adapter)
+		}
+		return s, nil
 	}
 
 	var router http.Handler

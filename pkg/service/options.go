@@ -1,6 +1,8 @@
 package service
 
 import (
+	"net/http"
+
 	"github.com/samber/lo"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
@@ -92,5 +94,17 @@ func WithVersion(version string) Option {
 func WithLocalDebugMode() Option {
 	return func(s *service) {
 		s.localDebugMode = true
+	}
+}
+
+// WithVanillaHandler routes a plain http.Handler through the SDK's Lambda
+// Function URL start path (the same its-felix handler the echo router uses).
+// The handler owns all routing, middleware, and auth; the SDK skips its
+// echo/gin router, built-in middleware, /api/status, and the RegisterRoutes
+// callback. Pair with UseResponseStreaming(true) for RESPONSE_STREAM Function
+// URLs.
+func WithVanillaHandler(h http.Handler) Option {
+	return func(s *service) {
+		s.vanillaHandler = h
 	}
 }
