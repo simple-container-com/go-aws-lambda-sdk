@@ -41,7 +41,11 @@ jobs:
     steps:
       # Keeps actions/checkout's default persisted credentials on purpose:
       # the `tag-release` task pushes a tag over the `origin` remote that
-      # this step configures.
+      # this step configures. Marking it `persist-credentials: true`
+      # explicitly would trip `gha-checkout-persist-credentials-true`
+      # (ERROR) instead, so the omission is suppressed here rather than
+      # made explicit.
+      # nosemgrep: gha-checkout-missing-persist-credentials-false
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: fregante/setup-git-user@024bc0b8e177d7e77203b48dab6fb45666854b35  # v2.0.2
       - name: build and tag library release

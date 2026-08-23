@@ -42,7 +42,16 @@ tasks:
   tools:
     runOn: host
     script:
-      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go get %
+      # Pinned deliberately. The previous form derived the list from
+      # tools.go and ran `go get` with no version, so every `welder make`
+      # re-floated these to latest: a local build moved mockery 2.53.5 to
+      # 2.53.6 and gofumpt 0.9.2 to 0.11.0, and any developer who
+      # committed afterwards undid whatever the last dependency pass had
+      # pinned. Keep this list in step with the imports in tools.go.
+      - go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - go get github.com/swaggo/swag/cmd/swag@v1.16.6
+      - go get github.com/vektra/mockery/v2@v2.53.5
+      - go get mvdan.cc/gofumpt@v0.9.2
       - go mod download
       - go generate -tags tools
       - go mod tidy
@@ -63,5 +72,10 @@ tasks:
   tag-release:
     runOn: host
     script:
-      - git tag ${project:version} || echo "Already set tag ${project:version}"
-      - git push -f origin ${project:version} || echo "Tag ${project:version} already exists in origin"
+      # Creating the tag may legitimately fail on a re-run of the same
+      # version, so that one stays tolerant. The push must not be: it is
+      # the step that actually publishes the release, and swallowing its
+      # exit code meant a broken push credential produced a green build
+      # that silently shipped nothing.
+      - git tag ${project:version} || echo "Tag ${project:version} already exists locally"
+      - git push -f origin ${project:version}
