@@ -83,7 +83,16 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	}
 
 	opts = append([]Option{WithVersion(os.Getenv(serviceVersionEnv))}, opts...)
-	opts = append([]Option{WithRoutingType(os.Getenv(lambdaRoutingTypeEnv))}, opts...)
+
+	routingType := os.Getenv(lambdaRoutingTypeEnv)
+	if routingType == "" && IsYandexCloudRuntime() {
+		// Yandex has no Lambda routing type — a Serverless Container is a plain
+		// HTTP server. Pick function-url so the router below still builds; the
+		// lambda start func it produces is never invoked, because Start() serves
+		// HTTP rather than calling lambda.Start.
+		routingType = lambdaRoutingTypeFunctionUrl
+	}
+	opts = append([]Option{WithRoutingType(routingType)}, opts...)
 
 	if os.Getenv("REQUEST_DEBUG") != "" {
 		opts = append([]Option{WithRequestDebugMode()}, opts...)
@@ -242,6 +251,15 @@ func (s *service) GetMeta(ctx context.Context) ResultMeta {
 }
 
 func (s *service) Start() error {
+	if IsYandexCloudRuntime() {
+		// A Serverless Container has no runtime API to register with: YC starts
+		// the image and sends it ordinary HTTP on $PORT. Scheduled invocations
+		// arrive the same way, wrapped in a trigger envelope — see
+		// yandexTriggerHandler.
+		s.server.Handler = s.yandexTriggerHandler(s.server.Handler)
+		s.Logger().Infof(context.Background(), "starting yandex serverless container on %s...", s.server.Addr)
+		return s.server.ListenAndServe()
+	}
 	if s.localDebugMode {
 		return s.server.ListenAndServe()
 	} else {
