@@ -66,6 +66,49 @@ func timerEnvelope(payloads ...string) string {
 	return string(body)
 }
 
+// capturedTimerEnvelope is a real envelope, byte for byte, as Yandex POSTed it
+// to a live Serverless Container on 2026-09-26 — captured by the yc-smoke stack,
+// whose app records every firing into Object Storage.
+//
+// Every other test here builds its envelope from the documented shape, so this
+// is the only thing pinning that shape to what YC actually sends. Two details it
+// contributes that the docs do not:
+//
+//   - the first message's fields are ALSO repeated at the top level, outside
+//     `messages`. Harmless, and deliberately not read — but a decoder written
+//     against the top-level copy would silently handle only single-message
+//     deliveries.
+//   - `details.payload` is a JSON *string* holding the request, not an object,
+//     so it needs a second decode. That is what yandexScheduleHTTPRequest does.
+const capturedTimerEnvelope = `{
+	"event_metadata": {
+		"event_id": "a1sfirca29jp3oa3p03o",
+		"event_type": "yandex.cloud.events.serverless.triggers.TimerMessage",
+		"created_at": "2026-09-26T17:15:29.601028425Z",
+		"cloud_id": "b1gt2boon38ahu7ikq7a",
+		"folder_id": "b1glosag2071ieml4ber"
+	},
+	"details": {
+		"trigger_id": "a1sa7uqfbk1dgbqr0lrn",
+		"payload": "{\"path\":\"/tick\",\"source\":\"yc-timer-smoke\"}"
+	},
+	"messages": [
+		{
+			"event_metadata": {
+				"event_id": "a1sfirca29jp3oa3p03o",
+				"event_type": "yandex.cloud.events.serverless.triggers.TimerMessage",
+				"created_at": "2026-09-26T17:15:29.601028425Z",
+				"cloud_id": "b1gt2boon38ahu7ikq7a",
+				"folder_id": "b1glosag2071ieml4ber"
+			},
+			"details": {
+				"trigger_id": "a1sa7uqfbk1dgbqr0lrn",
+				"payload": "{\"path\":\"/tick\",\"source\":\"yc-timer-smoke\"}"
+			}
+		}
+	]
+}`
+
 // recordingHandler captures the request the router was ultimately given.
 type recordingHandler struct {
 	called  int
@@ -125,6 +168,22 @@ func TestYandexTriggerDispatchesScheduleToItsRoute(t *testing.T) {
 	// policy sees the real status.
 	assert.Equal(t, http.StatusAccepted, rec.Code)
 	assert.Equal(t, `{"deleted":3}`, rec.Body.String())
+}
+
+func TestYandexTriggerDispatchesCapturedLiveEnvelope(t *testing.T) {
+	inner := &recordingHandler{}
+	handler := testService().yandexTriggerHandler(inner)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(capturedTimerEnvelope)))
+
+	require.Equal(t, 1, inner.called, "a real timer envelope must reach the router, not 404 at /")
+	// The payload names /tick and no method; POST is the default, and the path
+	// the payload asks for is the one the router sees — which is the whole
+	// contract, since the request itself arrived at "/".
+	assert.Equal(t, http.MethodPost, inner.request.Method)
+	assert.Equal(t, "/tick", inner.request.URL.Path)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 func TestYandexTriggerReadsApiGatewayShapedPayload(t *testing.T) {
