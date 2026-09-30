@@ -39,7 +39,12 @@ type Status struct {
 	Errors []string `json:"errors,omitempty" yaml:"errors,omitempty"`
 }
 
+// ReadBytes drains stream. A nil stream yields no bytes rather than panicking
+// in buf.ReadFrom — some adapters hand back a nil body for a bodyless request.
 func ReadBytes(stream io.Reader) []byte {
+	if stream == nil {
+		return nil
+	}
 	buf := new(bytes.Buffer)
 	_, _ = buf.ReadFrom(stream)
 	return buf.Bytes()
