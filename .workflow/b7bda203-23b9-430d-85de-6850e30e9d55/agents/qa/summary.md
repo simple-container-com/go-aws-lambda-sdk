@@ -1,0 +1,1 @@
+My edit is in the working tree and will be committed by the engine. Verification complete — here is my handoff.
