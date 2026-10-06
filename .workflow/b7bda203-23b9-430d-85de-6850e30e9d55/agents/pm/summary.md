@@ -1,0 +1,1 @@
+[thinking] # PM Handoff — Body-less POSTs panic on Lambda (nil `req.Body`, fleet-wide)
