@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/aws/aws-lambda-go/events"
 	echoadapter "github.com/its-felix/aws-lambda-go-http-adapter/adapter"
 	echohandler "github.com/its-felix/aws-lambda-go-http-adapter/handler"
 	echo "github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/aws/aws-lambda-go/events"
 )
 
 // The tests in http_adapter_test.go construct the nil Body directly. This one
