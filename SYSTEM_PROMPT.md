@@ -41,6 +41,31 @@ This is a Go SDK designed to simplify the development and deployment of AWS Lamb
 - **Swagger Integration**: Built-in support for API documentation
 - **Response Streaming**: Optional streaming response support for Lambda Function URLs
 
+### Request-body invariant (added 2026-10-06)
+
+`net/http`'s own server never hands a handler a nil `Request.Body` — it uses
+`http.NoBody` for an empty payload. The Lambda event→request adapters do **not**
+honour that: `its-felix/aws-lambda-go-http-adapter`'s `getBody` returns a bare nil
+`io.Reader` for an empty payload, so a body-less POST used to reach handlers with
+`Body == nil` and any unguarded `json.NewDecoder(c.Request().Body).Decode(&v)`
+panicked. `awslabs/aws-lambda-go-api-proxy` (the gin path) always passes a reader,
+so only the echo/streaming and vanilla paths were affected.
+
+`normalizeRequestBody` in `pkg/service/http_adapter.go` restores the invariant at
+the SDK boundary, so **no consumer needs a per-service middleware**. It is wired at
+every entry point, because no single one covers them all:
+
+- `normalizeBodyGinMiddleware()` — first in the gin chain (`service.go`), covers
+  routes, consumer middleware, swagger and `NoRoute`
+- `normalizeBodyEchoMiddleware()` — installed with `echoRouter.Pre(...)`, so it runs
+  before routing
+- guards inside `GinAdapter` / `EchoAdapter` / `ginRouter.Use` — `ginRouter.Use`
+  builds its adapter via `newGinAdapter`, **not** `GinAdapter`, so it needs its own
+- `withNormalizedBody(...)` — for the paths that bypass both routers:
+  `WithVanillaHandler` and `yandexTriggerHandler` (which reads `r.Body` directly)
+
+If you add a new entry point that hands a request to caller code, normalise there too.
+
 ## Environment Variables
 
 - `SIMPLE_CONTAINER_VERSION` - Service version
@@ -68,6 +93,29 @@ This is a Go SDK designed to simplify the development and deployment of AWS Lamb
 - **Tools**: Managed through `tools.go` with code generation
 - **Linting**: golangci-lint configuration in `.golangci.yml`
 - **Dependencies**: Go modules with extensive AWS and web framework dependencies
+
+## Releasing and consumer uptake (added 2026-10-06)
+
+This repo is a **library** — no stack, no `.sc/` config, no deployable artifact, and
+no isolated-stack lane. Release is fully automatic on merge to `main`
+(`.github/workflows/push.yaml`): `reecetech/version-increment` computes the next
+**calver** version and `welder deploy -e prod` runs `welder.yaml`'s `tag-release`
+task, which tags and pushes it. No operator `git tag` step is needed.
+
+The pushed tag (e.g. `2026.9.2`) has **no `v` prefix**, so it is not a valid Go module
+version. Consumers therefore pin a **pseudo-version** instead:
+
+```bash
+go get github.com/simple-container-com/go-aws-lambda-sdk@<merge-commit-sha>
+go mod tidy   # → v0.0.0-<utc-timestamp>-<12-char-sha>
+```
+
+By convention the SHA consumers pin is always a release-tagged commit on `main` —
+never an unmerged branch commit. Consumer pins drift widely (four distinct
+generations in the org as of 2026-10-06), so "all consumers are on version X" is never
+a safe assumption: read each `go.mod`. See
+`docs/rollout/nil-body-normalisation-uptake.md` for the verified inventory and the
+ordered uptake plan.
 
 ## Code Organization Principles
 
@@ -160,6 +208,17 @@ logger := logger.NewLoggerWithSinks(
     errorSink,
 )
 ```
+
+## Known repo-level debt (observed 2026-10-06, not fixed)
+
+- `.golangci.yml` is v1-format while current `golangci-lint` binaries are v2.x, so an
+  ad-hoc `golangci-lint run` fails with `unsupported version of the configuration: ""`.
+  CI is unaffected (`welder.yaml`'s `linters` task runs `bin/golangci-lint` built from
+  the `go.mod`-pinned `v1.64.8`), but local/agent lint runs are a no-op — run the
+  enabled linters (`gci`, `gofumpt`, `staticcheck`, `errcheck`, `ineffassign`) directly
+  until the config is migrated.
+- `welder.yaml`'s `tools` task runs `go get` + `go mod tidy` as part of `build`, so a
+  release build can mutate `go.mod`.
 
 ## Notes for Contributors
 

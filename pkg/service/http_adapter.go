@@ -22,6 +22,55 @@ type HttpWriterFlusher interface {
 	http.Hijacker
 }
 
+// normalizeRequestBody restores net/http's empty-body invariant: a handler is
+// always handed a non-nil Body, http.NoBody when there is nothing to read.
+//
+// The Lambda event->request adapters do not honour that. its-felix's getBody
+// returns a bare nil io.Reader for an empty payload, and
+// http.NewRequestWithContext leaves Request.Body nil when given one, so a
+// body-less POST reaches a handler with Body == nil. An unguarded
+// json.NewDecoder(c.Request().Body).Decode(&v) then dereferences a nil
+// interface and panics — a 502 with no useful log line — where the same code
+// under net/http would have returned io.EOF.
+//
+// Normalising here, once, inside the SDK is what makes every existing call site
+// in every dependent service correct without a per-service middleware.
+func normalizeRequestBody(r *http.Request) {
+	if r != nil && r.Body == nil {
+		r.Body = http.NoBody
+	}
+}
+
+// normalizeBodyGinMiddleware normalises the body for everything the gin engine
+// serves — routes, consumer middleware, swagger, NoRoute — not just handlers
+// registered through GinAdapter.
+func normalizeBodyGinMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		normalizeRequestBody(c.Request)
+		c.Next()
+	}
+}
+
+// normalizeBodyEchoMiddleware is the echo equivalent, installed with Pre() so
+// it runs before routing and before any consumer middleware.
+func normalizeBodyEchoMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			normalizeRequestBody(c.Request())
+			return next(c)
+		}
+	}
+}
+
+// withNormalizedBody is the plain http.Handler equivalent, for the paths that
+// bypass both routers (WithVanillaHandler, the Yandex trigger unwrapper).
+func withNormalizedBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		normalizeRequestBody(r)
+		next.ServeHTTP(w, r)
+	})
+}
+
 type HttpAdapterRouter interface {
 	Use(mw HttpAdapterHandler)
 	Any(p string, h HttpAdapterHandler)
@@ -186,6 +235,7 @@ func (e *echoAdapter) RequestBody() io.Reader {
 
 func EchoAdapter(callback func(c HttpAdapter) error, logger logger.Logger, localDebug bool) func(c echo.Context) error {
 	return func(c echo.Context) error {
+		normalizeRequestBody(c.Request())
 		return callback(&echoAdapter{
 			c:          c,
 			localDebug: localDebug,
@@ -196,6 +246,7 @@ func EchoAdapter(callback func(c HttpAdapter) error, logger logger.Logger, local
 
 func GinAdapter(callback func(c HttpAdapter) error, logger logger.Logger, localDebug bool) func(*gin.Context) {
 	return func(g *gin.Context) {
+		normalizeRequestBody(g.Request)
 		if err := callback(&ginAdapter{
 			c:          g,
 			localDebug: localDebug,
@@ -225,6 +276,7 @@ func EchoRouter(engine *echo.Echo, logger logger.Logger, debugMode bool) HttpAda
 
 func (g *ginRouter) Use(mw HttpAdapterHandler) {
 	g.router.Use(func(c *gin.Context) {
+		normalizeRequestBody(c.Request)
 		adapter := g.newGinAdapter(c)
 		if err := mw(adapter); err != nil {
 			c.AbortWithStatus(500)

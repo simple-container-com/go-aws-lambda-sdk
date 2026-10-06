@@ -5,3 +5,12 @@
 # Build outputs
 dist
 bin
+
+# Auto-added by forge-agent-worker — regenerable build outputs + forge metadata
+.workflow/
+
+# Auto-added by forge-agent-worker — SC plaintext secrets MUST NEVER be committed
+# (only the encrypted .sc/secrets.yaml registry is). See SC secrets docs.
+.sc/stacks/*/secrets.yaml
+.sc/cfg.*.yaml
+!.sc/secrets.yaml

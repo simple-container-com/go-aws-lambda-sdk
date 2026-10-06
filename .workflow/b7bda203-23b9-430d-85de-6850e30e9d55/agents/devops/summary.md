@@ -1,0 +1,1 @@
+The code is done and QA-verified. My job was the release/rollout leg: how the fix reaches the fleet, in what order, and whether the live DoD can be closed from inside this run. Three substantive findings, each verified against the repos and the live endpoint — not from memory:

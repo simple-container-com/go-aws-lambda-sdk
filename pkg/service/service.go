@@ -138,11 +138,14 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 	// swagger, and the RegisterRoutes requirement; just bind the handler to
 	// the same its-felix Function URL start path the echo router uses.
 	if s.vanillaHandler != nil {
+		// The vanilla handler gets the raw its-felix-built request, so it needs
+		// the empty-body normalisation the routers get from their middleware.
+		vanillaHandler := withNormalizedBody(s.vanillaHandler)
 		s.server = &http.Server{
 			Addr:    fmt.Sprintf("0.0.0.0:%s", lo.If(s.port != "", s.port).Else("8080")),
-			Handler: s.vanillaHandler,
+			Handler: vanillaHandler,
 		}
-		adapter := echoadapter.NewVanillaAdapter(s.vanillaHandler)
+		adapter := echoadapter.NewVanillaAdapter(vanillaHandler)
 		if s.useResponseStreaming {
 			s.lambdaStartFunc = echohandler.NewFunctionURLStreamingHandler(adapter)
 		} else {
@@ -159,6 +162,9 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 			return nil, errors.Wrapf(err, "failed to init echo router")
 		}
 		router = echoRouter
+		// Pre() so an empty body is normalised before routing and before any
+		// consumer middleware, not just for EchoAdapter-wrapped handlers.
+		echoRouter.Pre(normalizeBodyEchoMiddleware())
 		s.httpRouter = EchoRouter(echoRouter, s.logger, s.localDebugMode)
 		s.lambdaStartFunc = s.newEchoLambdaStartFunc(echoRouter)
 		echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
@@ -166,6 +172,9 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		log.Infof(ctx, "setting up gin router")
 		ginRouter := gin.New()
 		s.httpRouter = GinRouter(ginRouter, s.logger, s.localDebugMode)
+		// First in the chain: normalise an empty body before gin.Recovery, the
+		// SDK's middleware, consumer middleware, swagger, and NoRoute.
+		ginRouter.Use(normalizeBodyGinMiddleware())
 		ginRouter.Use(gin.Recovery())
 		s.lambdaAdapter = ginadapter.New(ginRouter)
 		router = ginRouter
