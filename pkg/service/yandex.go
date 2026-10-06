@@ -120,6 +120,11 @@ type (
 // included.
 func (s *service) yandexTriggerHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This reads r.Body directly below. A real net/http server never hands
+		// over a nil Body, but normalise anyway so the unwrapper is safe on any
+		// adapter-built request too.
+		normalizeRequestBody(r)
+
 		if r.Method != http.MethodPost || r.URL.Path != yandexTriggerPath {
 			next.ServeHTTP(w, r)
 			return
