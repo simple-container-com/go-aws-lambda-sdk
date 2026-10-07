@@ -19,8 +19,12 @@ func ToLambdaFunctionURLResponse(res events.APIGatewayProxyResponse) events.Lamb
 			}
 			return ""
 		}),
-		Body:       res.Body,
-		StatusCode: res.StatusCode,
+		// IsBase64Encoded MUST be carried over. The gin/apigw-proxy response writer
+		// base64-encodes any body that is not valid UTF-8 and sets this flag; dropping
+		// it here delivers a binary body to the client as literal base64 text.
+		Body:            res.Body,
+		IsBase64Encoded: res.IsBase64Encoded,
+		StatusCode:      res.StatusCode,
 	}
 }
 
