@@ -21,6 +21,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
       - name: Get next version
         uses: reecetech/version-increment@a29aa752dc3b8118a2dc2ed93faf0e95a73a9c7e  # 2024.10.1
         id: version
@@ -37,6 +39,13 @@ jobs:
       cicd-bot-telegram-token: ${{ steps.prepare-secrets.outputs.cicd-bot-telegram-token }}
       cicd-bot-telegram-chat-id: ${{ steps.prepare-secrets.outputs.cicd-bot-telegram-chat-id }}
     steps:
+      # Keeps actions/checkout's default persisted credentials on purpose:
+      # the `tag-release` task pushes a tag over the `origin` remote that
+      # this step configures. Marking it `persist-credentials: true`
+      # explicitly would trip `gha-checkout-persist-credentials-true`
+      # (ERROR) instead, so the omission is suppressed here rather than
+      # made explicit.
+      # nosemgrep: gha-checkout-missing-persist-credentials-false
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: fregante/setup-git-user@024bc0b8e177d7e77203b48dab6fb45666854b35  # v2.0.2
       - name: build and tag library release
@@ -44,7 +53,9 @@ jobs:
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |-
-          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/simple-container-com/go-aws-lambda-sdk.git
+          # No `git remote set-url` with an embedded token: actions/checkout
+          # above already authenticates `origin` via an http.extraheader, so
+          # the tag push works without writing the token into the remote URL.
           # nosemgrep: shell-curl-pipe-to-shell  # welder.simple-container.com is the org's own bootstrap; replace with checksum-pinned welder release as a follow-up
           bash <(curl -Ls "https://welder.simple-container.com/welder.sh") make --timestamps
           # nosemgrep: shell-curl-pipe-to-shell  # same as above; org-owned bootstrap
