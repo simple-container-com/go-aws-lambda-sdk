@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"github.com/gin-gonic/gin"
 	echoadapter "github.com/its-felix/aws-lambda-go-http-adapter/adapter"
 	echohandler "github.com/its-felix/aws-lambda-go-http-adapter/handler"
@@ -18,10 +21,6 @@ import (
 	echoSwagger "github.com/swaggo/echo-swagger"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/awsutil"
 	"github.com/simple-container-com/go-aws-lambda-sdk/pkg/logger"
@@ -68,6 +67,7 @@ type service struct {
 	lambdaCostPerMbPerMillisecond float64
 	useResponseStreaming          bool
 	vanillaHandler                http.Handler
+	swaggerInstanceName           string
 }
 
 func New(ctx context.Context, opts ...Option) (Service, error) {
@@ -167,7 +167,16 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 		echoRouter.Pre(normalizeBodyEchoMiddleware())
 		s.httpRouter = EchoRouter(echoRouter, s.logger, s.localDebugMode)
 		s.lambdaStartFunc = s.newEchoLambdaStartFunc(echoRouter)
-		echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
+		// Pass a configurable instance name through so composite hosts
+		// (e.g. Local Forge, which runs multiple services in one process)
+		// can serve each service's /api/swagger/* from its own non-default
+		// swag instance. Empty swaggerInstanceName → echoSwagger falls back
+		// to swag.Name = "swagger", preserving historical behaviour.
+		if s.swaggerInstanceName != "" {
+			echoRouter.GET("/api/swagger/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName(s.swaggerInstanceName)))
+		} else {
+			echoRouter.GET("/api/swagger/*", echoSwagger.WrapHandler)
+		}
 	} else if s.httpRouter == nil {
 		log.Infof(ctx, "setting up gin router")
 		ginRouter := gin.New()
@@ -191,7 +200,12 @@ func New(ctx context.Context, opts ...Option) (Service, error) {
 				c.Request.RequestURI = "/api/swagger/index.html"
 			}
 		})
-		ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+		// Same instance-name option as the echo branch above.
+		if s.swaggerInstanceName != "" {
+			ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler, ginSwagger.InstanceName(s.swaggerInstanceName)))
+		} else {
+			ginRouter.GET("/api/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+		}
 	}
 
 	s.server = &http.Server{

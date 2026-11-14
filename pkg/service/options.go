@@ -55,6 +55,24 @@ func WithRoutingType(routingType string) Option {
 	}
 }
 
+// WithSwaggerInstanceName changes which swag spec the built-in
+// /api/swagger/* UI serves. Default is the swaggo default ("swagger"),
+// which matches what `swag init` without `--instanceName` writes.
+//
+// Set this when a service's generated internal/docs/docs.go uses a
+// non-default InfoInstanceName — the typical reason is that the same
+// process hosts another service whose docs also register under
+// "swagger", and swag.Register panics on a duplicate name. The service
+// whose docs name was changed must ALSO pass this option so its
+// /api/swagger/* resolves the renamed instance (ginSwagger /
+// echoSwagger default to swag.Name which is "swagger"; see
+// gin-swagger@v1.6.0/swagger.go:113, echo-swagger@v1.4.1/swagger.go:21).
+func WithSwaggerInstanceName(name string) Option {
+	return func(s *service) {
+		s.swaggerInstanceName = name
+	}
+}
+
 func WithPort(port string) Option {
 	return func(s *service) {
 		s.port = port
