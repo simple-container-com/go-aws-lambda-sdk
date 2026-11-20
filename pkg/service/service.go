@@ -254,23 +254,37 @@ func (s *service) initEchoAdapter() (*echo.Echo, error) {
 	return e, nil
 }
 
+// GetMeta assembles the per-request metadata block services attach to
+// their responses (notably every error response).
+//
+// Every read here is a CHECKED type assertion, and that is load-bearing
+// rather than defensive habit: the values come from requestUIDMiddleware,
+// which only `New` installs (see s.httpRouter.Use in New). A host that
+// composes its own router — Local Forge mounts conductor + aigateway on
+// one echo instance via EchoRouter — never runs that middleware, so the
+// context is empty. With a bare `.(time.Time)` this function panicked,
+// net/http closed the connection, and the caller saw a bare EOF instead
+// of the error the handler was trying to report. Every 4xx/5xx of the
+// embedded aigateway was unreadable that way; live-caught 2026-11-20 on
+// POST /v1/generations.
+//
+// Absent values yield a zero-value block, never a wrong one: with no
+// start time, RequestTime and Cost stay 0 rather than reporting the
+// ~2000 years since the zero instant.
 func (s *service) GetMeta(ctx context.Context) ResultMeta {
-	requestStartedAt := s.logger.GetValue(ctx, RequestStartedKey).(time.Time)
-	requestFinishedAt := time.Now()
-	requestTime := time.Since(requestStartedAt)
-	isAuthorized := false
-	if isAuthorizedValue := s.logger.GetValue(ctx, IsAuthorizedKey); isAuthorizedValue != nil {
-		isAuthorized = isAuthorizedValue.(bool)
+	meta := ResultMeta{RequestFinishedAt: time.Now()}
+	if startedAt, ok := s.logger.GetValue(ctx, RequestStartedKey).(time.Time); ok {
+		meta.RequestStartedAt = startedAt
+		meta.RequestTime = time.Since(startedAt)
+		meta.Cost = s.lambdaSize * float64(meta.RequestTime.Milliseconds()) * s.lambdaCostPerMbPerMillisecond
 	}
-	cost := s.lambdaSize * float64(requestTime.Milliseconds()) * s.lambdaCostPerMbPerMillisecond
-	return ResultMeta{
-		RequestUID:        s.logger.GetValue(ctx, RequestUIDKey).(string),
-		RequestStartedAt:  requestStartedAt,
-		RequestTime:       requestTime,
-		RequestFinishedAt: requestFinishedAt,
-		IsAuthorized:      isAuthorized,
-		Cost:              cost,
+	if uid, ok := s.logger.GetValue(ctx, RequestUIDKey).(string); ok {
+		meta.RequestUID = uid
 	}
+	if isAuthorized, ok := s.logger.GetValue(ctx, IsAuthorizedKey).(bool); ok {
+		meta.IsAuthorized = isAuthorized
+	}
+	return meta
 }
 
 func (s *service) Start() error {
